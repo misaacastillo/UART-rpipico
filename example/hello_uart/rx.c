@@ -1,33 +1,31 @@
 #include <stdio.h>
+
+#include "hardware/uart.h"
 #include "pico/stdlib.h"
+#include "uart_line.h"
 
-int main() {
-    stdio_init_all();  // Inicializa el estándar de entrada y salida
-
-    // Configura UART con baudrate 115200
+int main(void) {
+    stdio_init_all();
+    gpio_set_function(1, GPIO_FUNC_UART);
     uart_init(uart0, 115200);
-    gpio_set_function(0, GPIO_FUNC_UART);  // TX (Pin GP0)
-    gpio_set_function(1, GPIO_FUNC_UART);  // RX (Pin GP1)
+    gpio_pull_up(1);
 
+    struct uart_line line = {0};
     while (true) {
-        if (uart_is_readable(uart0)) {
-            char buffer[100];   // Buffer para almacenar el mensaje recibido
-            int i = 0;
+        if (!uart_is_readable(uart0)) {
+            tight_loop_contents();
+            continue;
+        }
 
-            // Lee los datos de UART hasta encontrar un '\n' (fin del mensaje)
-            while (uart_is_readable(uart0)) {
-                char c = uart_getc(uart0);  // Obtiene el carácter recibido
-                if (c == '\n' || i >= 99) {
-                    break;  // Termina si se recibe un salto de línea o el buffer está lleno
-                }
-                buffer[i++] = c;
-            }
-            buffer[i] = '\0';  // Termina la cadena con un carácter NULL
-            
-            // Imprime el mensaje en una sola línea
-            printf("%s\n", buffer);  // Imprime el mensaje recibido y salta a la siguiente línea
+        switch (uart_line_feed(&line, (uint8_t)uart_getc(uart0))) {
+        case UART_LINE_READY:
+            puts(line.text);
+            break;
+        case UART_LINE_DROPPED:
+            puts("[discarded malformed or oversized line]");
+            break;
+        case UART_LINE_PENDING:
+            break;
         }
     }
-
-    return 0;
 }
