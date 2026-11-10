@@ -19,7 +19,15 @@ struct uart_line {
     bool dropping;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Start with zero-initialized state. Read text after READY and before the next call. */
 enum uart_line_result uart_line_feed(struct uart_line *line, uint8_t byte);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

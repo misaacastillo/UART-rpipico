@@ -24,7 +24,8 @@ cmake --build build-pico
 
 The SDK can fetch and build picotool on the first build to create the UF2 files.
 The outputs are `build-pico/uart_tx.uf2` and `build-pico/uart_rx.uf2`.
-For Pico W use `-DPICO_BOARD=pico_w` and a separate build directory.
+For Pico W use `-DPICO_BOARD=pico_w`. For Pico 2 W use `-DPICO_BOARD=pico2_w`.
+Use a separate build directory and load the UF2 built for your board.
 
 ## Run on two boards
 
@@ -48,22 +49,43 @@ interrupt-driven or DMA receiver and a separate queue for USB output.
 
 ## Run tests without hardware
 
+Use CMake 3.17 or newer and host C and C++ compilers.
+
 ```sh
-mkdir -p build-host
-cc -std=c11 -Wall -Wextra -Werror -pedantic -Iexample/hello_uart \
-  example/hello_uart/uart_line.c tests/test_uart_line.c -o build-host/test_uart_line
-./build-host/test_uart_line
+cmake -S tests -B build-host -DCMAKE_BUILD_TYPE=Release
+cmake --build build-host
+(cd build-host && ctest --output-on-failure)
 ```
 
 The tests cover fragmented input, back-to-back lines, empty lines, LF and CRLF,
-the buffer boundary, oversized input, embedded NUL bytes, and recovery. These
-tests exercise line parsing. The two-board run above checks wiring and USB output.
+the buffer boundary, oversized input, embedded NUL bytes, and recovery. A C++
+consumer links to the same C library as the Pico receiver. The two-board run
+above checks wiring and USB output.
 
 ## Reuse the parser
 
-Copy or compile `uart_line.c` and include `uart_line.h`. Initialize a separate
-`struct uart_line` to zero for each byte stream. Feed one byte at a time. Read
-`line.text` after `UART_LINE_READY` and before the next call. A
+From your CMake project's directory, check out a specific version of the library.
+
+```sh
+git clone --branch v0.1.0-rc.2 --depth 1 https://github.com/misaacastillo/UART-rpipico.git third_party/UART-rpipico
+```
+
+Add the following to your `CMakeLists.txt` after defining `my_app`. Enable C in
+your project even if the application itself is C++.
+
+```cmake
+add_subdirectory(third_party/UART-rpipico/example/hello_uart uart_line_build)
+target_link_libraries(my_app PRIVATE uart_rpipico::line)
+```
+
+Include `uart_line.h` in your application. The target works on a host computer
+or in a Pico SDK project. See the [standalone consumer](tests/CMakeLists.txt)
+for a complete build with C and C++ examples.
+
+For other build systems, compile `uart_line.c` and add its directory to the
+include path. Initialize a separate `struct uart_line` to zero for each byte
+stream. Feed one byte at a time. Read `line.text` after `UART_LINE_READY` and
+before the next call. A
 `UART_LINE_DROPPED` result means the parser discarded the line and is ready for
 the next one.
 
